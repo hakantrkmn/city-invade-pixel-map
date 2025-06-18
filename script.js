@@ -316,12 +316,20 @@ function drawMap() {
       alert('Önce bir kütük (şehir) seçmelisin!');
       return;
     }
+    if (Date.now() - lastPaintTime < COOLDOWN_MS) {
+      const remainingS = Math.ceil((COOLDOWN_MS - (Date.now() - lastPaintTime))/1000);
+      alert(`Boyama için ${remainingS} saniye daha beklemelisin!`);
+      return;
+    }
     if (gx >= 0 && gx < gridCols && gy >= 0 && gy < gridRows) {
       const currentColor = pixelGrid[gx][gy];
       if (currentColor !== myCityColor) {
         pixelGrid[gx][gy] = myCityColor;
         const pixelKey = `${gx}-${gy}`;
         set(ref(db, `pixels/${pixelKey}`), { color: myCityColor, by: myCityName, t: serverTimestamp() });
+        lastPaintTime = Date.now();
+        localStorage.setItem('lastPaintTime', lastPaintTime.toString());
+        startCooldown();
         drawMap();
       }
     }
@@ -345,6 +353,60 @@ function drawMap() {
     offsetY = mouseY - ((mouseY - offsetY) * (zoom / prevZoom));
     drawMap();
   };
+
+  // Touch support
+  let pinchStartDist = 0;
+  let pinchStartZoom = 1;
+  let pinchCenter = {x:0,y:0};
+
+  function getTouchDist(t1, t2) {
+    return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+  }
+
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      isDragging = true;
+      dragStart.x = e.touches[0].clientX;
+      dragStart.y = e.touches[0].clientY;
+      dragOffsetStart.x = offsetX;
+      dragOffsetStart.y = offsetY;
+    } else if (e.touches.length === 2) {
+      isDragging = false;
+      const [t1, t2] = e.touches;
+      pinchStartDist = getTouchDist(t1, t2);
+      pinchStartZoom = zoom;
+      pinchCenter.x = (t1.clientX + t2.clientX) / 2;
+      pinchCenter.y = (t1.clientY + t2.clientY) / 2;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 1 && isDragging) {
+      offsetX = dragOffsetStart.x + (e.touches[0].clientX - dragStart.x);
+      offsetY = dragOffsetStart.y + (e.touches[0].clientY - dragStart.y);
+      drawMap();
+    } else if (e.touches.length === 2) {
+      const [t1, t2] = e.touches;
+      const newDist = getTouchDist(t1, t2);
+      if (pinchStartDist > 0) {
+        const factor = newDist / pinchStartDist;
+        const prevZoom = zoom;
+        zoom = Math.max(0.5, Math.min(pinchStartZoom * factor, 20));
+        // adjust offsets relative to pinch center
+        offsetX = pinchCenter.x - ((pinchCenter.x - offsetX) * (zoom / prevZoom));
+        offsetY = pinchCenter.y - ((pinchCenter.y - offsetY) * (zoom / prevZoom));
+        drawMap();
+      }
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', () => {
+    if (event.touches.length === 0) {
+      isDragging = false;
+      pinchStartDist = 0;
+    }
+  });
 }
 
 // Bir polygonu daha büyük ve belirgin piksellerle doldur
@@ -449,4 +511,35 @@ onValue(cityPlayersRef, snap=>{
   Object.keys(data).forEach(city=>{
     cityCounts[city]= Object.keys(data[city]).length;
   });
-}); 
+});
+
+// Cooldown constants and variables
+const COOLDOWN_MS = 5 * 60 * 1000; // 5 dk
+let lastPaintTime = parseInt(localStorage.getItem('lastPaintTime') || '0', 10);
+let cooldownInterval = null;
+
+function startCooldown() {
+  updateCooldownDisplay();
+  if (cooldownInterval) clearInterval(cooldownInterval);
+  cooldownInterval = setInterval(updateCooldownDisplay, 1000);
+}
+
+function updateCooldownDisplay() {
+  const display = document.getElementById('cooldown-display');
+  if (!display) return;
+  const remaining = COOLDOWN_MS - (Date.now() - lastPaintTime);
+  if (remaining <= 0) {
+    display.textContent = 'Boyama hazır';
+    if (cooldownInterval) {
+      clearInterval(cooldownInterval);
+      cooldownInterval = null;
+    }
+  } else {
+    const sec = Math.floor(remaining / 1000) % 60;
+    const min = Math.floor(remaining / 60000);
+    display.textContent = `Bekleme: ${min}:${sec.toString().padStart(2,'0')}`;
+  }
+}
+
+// start initial cooldown timer on load
+startCooldown(); 
