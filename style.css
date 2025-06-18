@@ -1,0 +1,26 @@
+.map-container {
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+}
+
+#turkey-map {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.city {
+    stroke: #222;
+    stroke-width: 2;
+    opacity: 0.9;
+}
+
+#istanbul { fill: #f44336; }
+#ankara { fill: #2196f3; }
+#izmir { fill: #4caf50; }
+/* Diğer şehirler için farklı renkler eklenebilir */ 
