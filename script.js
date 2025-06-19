@@ -2,6 +2,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.1/firebas
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js';
 import { getDatabase, ref, set, onValue, serverTimestamp, remove } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js';
 import { firebaseConfig } from './firebaseConfig.js';
+import mapUrl from './tr.json?url';
 
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
@@ -52,7 +53,7 @@ function hideCitySelector() {
   if (modal) modal.style.display = 'none';
 }
 
-fetch(`${import.meta.env.BASE_URL}tr.json`)
+fetch(mapUrl)
   .then(response => response.json())
   .then(data => {
     geojsonData = data;
