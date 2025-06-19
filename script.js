@@ -52,7 +52,7 @@ function hideCitySelector() {
   if (modal) modal.style.display = 'none';
 }
 
-fetch('tr.json')
+fetch(`${import.meta.env.BASE_URL}tr.json`)
   .then(response => response.json())
   .then(data => {
     geojsonData = data;
@@ -75,9 +75,11 @@ onValue(pixelsRef, snap => {
     const [gxStr, gyStr] = key.split('-');
     const gx = parseInt(gxStr, 10);
     const gy = parseInt(gyStr, 10);
-    if (gx >= 0 && gx < gridCols && gy >= 0 && gy < gridRows) {
+    if (gx >= 0 && gx < gridCols && gy >= 0 && gy < gridRows && pixelGrid[gx]) {
       paintedPixels[key] = data[key];
-      pixelGrid[gx][gy] = data[key].color;
+      if (pixelGrid[gx][gy] !== undefined) {
+        pixelGrid[gx][gy] = data[key].color;
+      }
     }
   });
   drawMap(); // Yeniden çiz
