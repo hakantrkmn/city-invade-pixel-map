@@ -541,7 +541,7 @@ function updateCooldownDisplay() {
   } else {
     const sec = Math.floor(remaining / 1000) % 60;
     const min = Math.floor(remaining / 60000);
-    display.textContent = `Bekleme: ${min}:${sec.toString().padStart(2,'0')}`;
+    display.textContent = `Sonraki boyamaya: ${min}:${sec.toString().padStart(2,'0')}`;
   }
 }
 
