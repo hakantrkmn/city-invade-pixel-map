@@ -326,6 +326,7 @@ function drawMap() {
     }
     if (gx >= 0 && gx < gridCols && gy >= 0 && gy < gridRows) {
       const currentColor = pixelGrid[gx][gy];
+      if (currentColor === null) return; // dış bölge tıklanamaz
       if (currentColor !== myCityColor) {
         pixelGrid[gx][gy] = myCityColor;
         const pixelKey = `${gx}-${gy}`;
