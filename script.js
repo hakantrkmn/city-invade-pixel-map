@@ -272,7 +272,7 @@ function drawMap() {
       if (cityNameToShow) {
         const defenders = cityCounts[cityNameToShow] || 0;
         const defenderText = defenders === 1 ? '1 kişi savaşıyor' : `${defenders} kişi savaşıyor`;
-        tooltip.textContent = `${cityNameToShow} – ${defenderText}`;
+        tooltip.textContent = `${cityNameToShow} için ${defenderText}`;
         tooltip.style.left = e.clientX + 12 + 'px';
         tooltip.style.top = e.clientY + 8 + 'px';
         tooltip.style.display = 'block';
