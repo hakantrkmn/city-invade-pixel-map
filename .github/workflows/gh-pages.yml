@@ -12,6 +12,15 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      VITE_FB_APIKEY: ${{ secrets.VITE_FB_APIKEY }}
+      VITE_FB_AUTHDOMAIN: ${{ secrets.VITE_FB_AUTHDOMAIN }}
+      VITE_FB_PROJECTID: ${{ secrets.VITE_FB_PROJECTID }}
+      VITE_FB_STORAGE: ${{ secrets.VITE_FB_STORAGE }}
+      VITE_FB_SENDER: ${{ secrets.VITE_FB_SENDER }}
+      VITE_FB_APPID: ${{ secrets.VITE_FB_APPID }}
+      VITE_FB_MEAS: ${{ secrets.VITE_FB_MEAS }}
+      VITE_FB_DBURL: ${{ secrets.VITE_FB_DBURL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
