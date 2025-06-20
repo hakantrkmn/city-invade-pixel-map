@@ -1,7 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js';
 import { getDatabase, ref, set, onValue, serverTimestamp, remove } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js';
-import { firebaseConfig } from './firebaseConfig.js';
 import mapUrl from './tr.json?url';
 
 const app = initializeApp(firebaseConfig);
@@ -546,4 +545,16 @@ function updateCooldownDisplay() {
 }
 
 // start initial cooldown timer on load
-startCooldown(); 
+startCooldown();
+
+// Firebase config from Vite environment variables
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FB_APIKEY,
+  authDomain: import.meta.env.VITE_FB_AUTHDOMAIN,
+  projectId: import.meta.env.VITE_FB_PROJECTID,
+  storageBucket: import.meta.env.VITE_FB_STORAGE,
+  messagingSenderId: import.meta.env.VITE_FB_SENDER,
+  appId: import.meta.env.VITE_FB_APPID,
+  measurementId: import.meta.env.VITE_FB_MEAS,
+  databaseURL: import.meta.env.VITE_FB_DBURL
+}; 
