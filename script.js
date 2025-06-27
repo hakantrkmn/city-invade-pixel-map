@@ -382,13 +382,17 @@ function drawMap() {
     tooltip = document.createElement('div');
     tooltip.style.position = 'fixed';
     tooltip.style.pointerEvents = 'none';
-    tooltip.style.background = 'rgba(0,0,0,0.8)';
+    tooltip.style.background = 'rgba(0,0,0,0.9)';
     tooltip.style.color = '#fff';
-    tooltip.style.padding = '4px 10px';
-    tooltip.style.borderRadius = '6px';
-    tooltip.style.fontSize = '16px';
+    tooltip.style.padding = '8px 12px';
+    tooltip.style.borderRadius = '8px';
+    tooltip.style.fontSize = '14px';
+    tooltip.style.lineHeight = '1.4';
+    tooltip.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    tooltip.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
     tooltip.style.zIndex = '10';
     tooltip.style.display = 'none';
+    tooltip.style.maxWidth = '200px';
     document.body.appendChild(tooltip);
   }
 
@@ -406,7 +410,15 @@ function drawMap() {
       if (cityNameToShow) {
         const defenders = cityCounts[cityNameToShow] || 0;
         const defenderText = defenders === 1 ? '1 defender' : `${defenders} defenders`;
-        tooltip.textContent = `${cityNameToShow}: ${defenderText}`;
+        
+        // Tooltip content with user info
+        let tooltipText = `${cityNameToShow}: ${defenderText}`;
+        if (painted && painted.user) {
+          tooltipText += `\nPainted by: u/${painted.user}`;
+        }
+        
+        // Multi-line tooltip support
+        tooltip.innerHTML = tooltipText.replace(/\n/g, '<br>');
         tooltip.style.left = e.clientX + 12 + 'px';
         tooltip.style.top = e.clientY + 8 + 'px';
         tooltip.style.display = 'block';
