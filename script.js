@@ -468,9 +468,9 @@ function drawMap() {
         bufferCtx.fillStyle = myCityColor;
         bufferCtx.fillRect(gx, gy, 1, 1);
         const pixelKey = `${gx}-${gy}`;
-        set(ref(db, `pixels/${pixelKey}`), { color: myCityColor, by: myCityName, t: serverTimestamp() });
+        set(ref(db, `pixels/${pixelKey}`), { color: myCityColor, by: myCityName, user: redditUser, t: serverTimestamp() });
         lastPaintTime = Date.now();
-        localStorage.setItem('lastPaintTime', lastPaintTime.toString());
+        saveUserPaintTime(lastPaintTime);
         startCooldown();
         drawMap();
       }
@@ -643,10 +643,14 @@ function setupUI() {
       canPaint = true;
       if (loginBtn) loginBtn.style.display = 'none';
       if (userBox) { userBox.textContent = redditUser; userBox.style.display = 'block'; }
+      // Load user's cooldown from Firebase
+      loadUserCooldown();
     } else {
       canPaint = false;
       if (loginBtn) loginBtn.style.display = 'block';
       if (userBox) userBox.style.display = 'none';
+      // Start cooldown display without data
+      startCooldown();
     }
   });
 }
@@ -687,8 +691,34 @@ onValue(cityPlayersRef, snap=>{
 
 // Cooldown constants and variables
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 dk
-let lastPaintTime = parseInt(localStorage.getItem('lastPaintTime') || '0', 10);
+let lastPaintTime = 0;
 let cooldownInterval = null;
+
+// Load user's last paint time from Firebase
+async function loadUserCooldown() {
+  if (!redditUser) return;
+  try {
+    const paintTimeRef = ref(db, `paintTimes/${redditUser}`);
+    onValue(paintTimeRef, (snapshot) => {
+      lastPaintTime = snapshot.val() || 0;
+      startCooldown();
+    }, { onlyOnce: true });
+  } catch (error) {
+    console.error('Error loading cooldown:', error);
+    lastPaintTime = 0;
+  }
+}
+
+// Save user's paint time to Firebase
+async function saveUserPaintTime(timestamp) {
+  if (!redditUser) return;
+  try {
+    const paintTimeRef = ref(db, `paintTimes/${redditUser}`);
+    await set(paintTimeRef, timestamp);
+  } catch (error) {
+    console.error('Error saving paint time:', error);
+  }
+}
 
 function startCooldown() {
   updateCooldownDisplay();
@@ -711,7 +741,4 @@ function updateCooldownDisplay() {
     const min = Math.floor(remaining / 60000);
     display.textContent = `Next paint in: ${min}:${sec.toString().padStart(2,'0')}`;
   }
-}
-
-// start initial cooldown timer on load
-startCooldown(); 
+} 
