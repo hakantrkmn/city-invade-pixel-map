@@ -19,14 +19,7 @@ const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 export const db = getDatabase(app);
 
-// Hızlı bağlantı testi (geçici)
-const testRef = ref(db, 'test/hello');
-set(testRef, { msg: 'Merhaba Firebase', time: Date.now() }).then(() => {
-  console.log('Firebase test verisi yazıldı');
-});
-onValue(testRef, snap => {
-  console.log('Firebase verisi geldi:', snap.val());
-});
+
 
 // Şehirler arası etkileşim veya dinamik işlemler için JS kodları buraya eklenecek.
 
@@ -64,6 +57,10 @@ function hideCitySelector() {
   if (modal) modal.style.display = 'none';
 }
 
+// Off-screen buffer: will hold 1×1-pixel map once and be scaled on screen
+export const bufferCanvas = document.createElement('canvas');
+export const bufferCtx = bufferCanvas.getContext('2d');
+
 fetch(mapUrl)
   .then(response => response.json())
   .then(data => {
@@ -97,6 +94,8 @@ onValue(pixelsRef, snap => {
       paintedPixels[key] = data[key];
       if (pixelGrid[gx][gy] !== undefined) {
         pixelGrid[gx][gy] = data[key].color;
+        bufferCtx.fillStyle = data[key].color;
+        bufferCtx.fillRect(gx, gy, 1, 1); // keep buffer in sync
       }
     }
   });
@@ -124,6 +123,11 @@ function computePixelGrid() {
   // Piksel gridini bir kez hesapla
   pixelGrid = Array.from({ length: gridCols }, () => Array(gridRows).fill(null));
   nameGrid = Array.from({ length: gridCols }, () => Array(gridRows).fill(null));
+
+  // Resize buffer to grid size
+  bufferCanvas.width = gridCols;
+  bufferCanvas.height = gridRows;
+  bufferCtx.clearRect(0, 0, gridCols, gridRows);
 
   // GeoJSON içindeki tüm koordinatları tarayarak dinamik sınır belirle
   const allCoords = [];
@@ -219,26 +223,37 @@ function computePixelGrid() {
       pixelGrid[gx][gy] = paintedPixels[key].color;
     }
   }
+
+  // --- Draw to off-screen buffer ---
+  for (let gx = 0; gx < gridCols; gx++) {
+    for (let gy = 0; gy < gridRows; gy++) {
+      const color = pixelGrid[gx][gy];
+      if (color) {
+        bufferCtx.fillStyle = color;
+        bufferCtx.fillRect(gx, gy, 1, 1);
+      }
+    }
+  }
 }
 
 function drawMap() {
   // Canvas'ı oluştur veya güncelle
   const container = document.querySelector('.map-container');
-  container.innerHTML = '';
   const width = window.innerWidth;
   const height = window.innerHeight - 40;
-  canvas = document.createElement('canvas');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+    canvas.style.position = 'fixed';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.zIndex = '0';
+    ctx = canvas.getContext('2d');
+  }
   canvas.width = width;
   canvas.height = height;
   canvas.style.width = '100vw';
   canvas.style.height = height + 'px';
-  canvas.style.display = 'block';
-  canvas.style.position = 'fixed';
-  canvas.style.top = '0';
-  canvas.style.left = '0';
-  canvas.style.zIndex = '0';
-  container.appendChild(canvas);
-  ctx = canvas.getContext('2d');
 
   // Piksel boyutu (zoom'a göre)
   pixelSize = Math.min(width / gridCols, height / gridRows) * zoom;
@@ -273,24 +288,39 @@ function drawMap() {
   offsetX = Math.max(Math.min(offsetX, width / 2), -gridCols * pixelSize + width / 2);
   offsetY = Math.max(Math.min(offsetY, height / 2), -gridRows * pixelSize + height / 2);
 
-  // Tüm grid'i ekrana çiz
-  for (let gx = 0; gx < gridCols; gx++) {
-    for (let gy = 0; gy < gridRows; gy++) {
-      const color = pixelGrid[gx][gy];
-      if (color) {
-        const x = gx * pixelSize + offsetX;
-        const y = gy * pixelSize + offsetY;
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y, pixelSize, pixelSize);
-        // Çerçeve kalınlığı ve opaklığı zoom'a göre ayarlanır
-        let borderAlpha = Math.min(1, Math.max(0, (zoom - 1) * 0.7)); // zoom=1'de 0, zoom=2'de 0.7, zoom>=2.5'te 1
-        if (borderAlpha > 0) {
-          ctx.lineWidth = Math.max(0.15, 0.25 * zoom); // zoom arttıkça kalınlaşır
-          ctx.strokeStyle = `rgba(0,0,0,${borderAlpha})`;
-          ctx.strokeRect(x, y, pixelSize, pixelSize);
-        }
-      }
+  // Tek draw: off-screen buffer → ana canvas (ölçeklenmiş)
+  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(pixelSize, pixelSize);
+  ctx.drawImage(bufferCanvas, 0, 0);
+  ctx.restore();
+
+  // --- Lightweight grid overlay ---
+  const showGrid = pixelSize >= 4; // only draw when zoomed enough
+  if (showGrid) {
+    const borderAlpha = Math.min(1, (pixelSize - 3) / 10);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(0,0,0,${borderAlpha})`;
+    ctx.beginPath();
+    // visible column range
+    const startCol = Math.max(0, Math.floor((-offsetX) / pixelSize));
+    const endCol = Math.min(gridCols, Math.ceil((canvas.width - offsetX) / pixelSize));
+    for (let c = startCol; c <= endCol; c++) {
+      const x = offsetX + c * pixelSize;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
     }
+    // visible row range
+    const startRow = Math.max(0, Math.floor((-offsetY) / pixelSize));
+    const endRow = Math.min(gridRows, Math.ceil((canvas.height - offsetY) / pixelSize));
+    for (let r = startRow; r <= endRow; r++) {
+      const y = offsetY + r * pixelSize;
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+    }
+    ctx.stroke();
   }
 
   // Tooltip oluştur
@@ -379,6 +409,9 @@ function drawMap() {
       if (currentColor === null) return; // dış bölge tıklanamaz
       if (currentColor !== myCityColor) {
         pixelGrid[gx][gy] = myCityColor;
+        // buffer'ı da güncelle
+        bufferCtx.fillStyle = myCityColor;
+        bufferCtx.fillRect(gx, gy, 1, 1);
         const pixelKey = `${gx}-${gy}`;
         set(ref(db, `pixels/${pixelKey}`), { color: myCityColor, by: myCityName, t: serverTimestamp() });
         lastPaintTime = Date.now();
@@ -532,7 +565,8 @@ function setupUI() {
     if (!myCityColor) myCityColor = cityColorMap[myCityName];
   }
 
-  if (myCityName && !states.includes(myCityName)) {
+  const availableNames = Object.keys(cityColorMap);
+  if (myCityName && !availableNames.includes(myCityName)) {
     // kayıtlı ad bu GeoJSON'da yok → sil
     localStorage.removeItem('myCityName');
     localStorage.removeItem('myCityColor');
