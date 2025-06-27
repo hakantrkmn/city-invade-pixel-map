@@ -531,6 +531,14 @@ function setupUI() {
     joinCity(myCityName);
     if (!myCityColor) myCityColor = cityColorMap[myCityName];
   }
+
+  if (myCityName && !states.includes(myCityName)) {
+    // kayıtlı ad bu GeoJSON'da yok → sil
+    localStorage.removeItem('myCityName');
+    localStorage.removeItem('myCityColor');
+    myCityName = null;
+    myCityColor = null;
+  }
 }
 
 // After globals
