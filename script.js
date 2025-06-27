@@ -5,7 +5,7 @@ import mapUrl from './us-states.json?url';
 
 // === Reddit OAuth constants ===
 const REDDIT_CLIENT_ID = '89f2pNvg2GuguYf7Oe7SMg';
-const REDDIT_REDIRECT = 'https://hakantrkmn.github.io/city-invade-pixel-map/'; // root page acts as callback
+const REDDIT_REDIRECT = import.meta.env.DEV ? 'http://localhost:5173/city-invade-pixel-map/' : 'https://hakantrkmn.github.io/city-invade-pixel-map/';
 
 // === OAuth helper (PKCE) ===
 function generateRandomString(len = 128) {
@@ -22,53 +22,26 @@ function base64url(buf) {
 }
 
 async function redditLogin() {
-  const verifier = generateRandomString(64);
-  const challenge = base64url(await sha256(verifier));
-  sessionStorage.setItem('pkce_verifier', verifier);
   const state = crypto.randomUUID();
   sessionStorage.setItem('oauth_state', state);
   const params = new URLSearchParams({
     client_id: REDDIT_CLIENT_ID,
-    response_type: 'code',
+    response_type: 'token',
     state,
     redirect_uri: REDDIT_REDIRECT,
     duration: 'temporary',
-    scope: 'identity',
-    code_challenge: challenge,
-    code_challenge_method: 'S256'
+    scope: 'identity'
   });
   window.location.href = `https://www.reddit.com/api/v1/authorize?${params}`;
 }
 
-async function handleOAuthCallback() {
-  const qs = new URLSearchParams(window.location.search);
-  if (!qs.get('code')) return;
-  const code = qs.get('code');
-  const state = qs.get('state');
-  if (state !== sessionStorage.getItem('oauth_state')) {
-    alert('OAuth state mismatch');
-    return;
-  }
-  const verifier = sessionStorage.getItem('pkce_verifier');
-  // Exchange code -> token
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: REDDIT_REDIRECT,
-    code_verifier: verifier
-  });
-  const resp = await fetch('https://www.reddit.com/api/v1/access_token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body
-  });
-  const json = await resp.json();
-  if (json.access_token) {
-    localStorage.setItem('reddit_token', json.access_token);
-    localStorage.setItem('token_exp', Date.now() + json.expires_in * 1000);
-  }
-  // clean query params
-  window.history.replaceState({}, '', REDDIT_REDIRECT);
+function handleOAuthCallback() {
+  if (!location.hash.includes('access_token')) return;
+  const frag = Object.fromEntries(location.hash.substring(1).split('&').map(p=>p.split('=')));
+  if (frag.state !== sessionStorage.getItem('oauth_state')) return;
+  localStorage.setItem('reddit_token', frag.access_token);
+  localStorage.setItem('token_exp', Date.now() + (+frag.expires_in)*1000);
+  window.location.hash = '';
 }
 
 async function getRedditUsername() {
@@ -82,7 +55,7 @@ async function getRedditUsername() {
 }
 
 let redditUser = null;
-await handleOAuthCallback();
+handleOAuthCallback();
 
 // Firebase config from Vite environment variables
 const firebaseConfig = {
