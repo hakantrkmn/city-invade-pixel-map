@@ -637,6 +637,11 @@ function setupUI() {
 
   // Determine Reddit login state
   getRedditUsername().then(name => {
+    // Cleanup previous user's listener if switching users
+    if (redditUser !== name) {
+      cleanupCooldownListener();
+    }
+    
     redditUser = name;
     const userBox = document.getElementById('reddit-user-display');
     if (redditUser) {
@@ -649,6 +654,8 @@ function setupUI() {
       canPaint = false;
       if (loginBtn) loginBtn.style.display = 'block';
       if (userBox) userBox.style.display = 'none';
+      // Cleanup listener when logged out
+      cleanupCooldownListener();
       // Start cooldown display without data
       startCooldown();
     }
@@ -693,14 +700,19 @@ onValue(cityPlayersRef, snap=>{
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 dk
 let lastPaintTime = 0;
 let cooldownInterval = null;
+let cooldownListener = null; // Track listener for cleanup
 
 // Load user's last paint time from Firebase and listen for real-time updates
 async function loadUserCooldown() {
   if (!redditUser) return;
+  
+  // Cleanup previous listener if exists
+  cleanupCooldownListener();
+  
   try {
     const paintTimeRef = ref(db, `paintTimes/${redditUser}`);
     // Real-time listener - updates when user paints from another device
-    onValue(paintTimeRef, (snapshot) => {
+    cooldownListener = onValue(paintTimeRef, (snapshot) => {
       const newTime = snapshot.val() || 0;
       if (newTime !== lastPaintTime) {
         lastPaintTime = newTime;
@@ -710,6 +722,14 @@ async function loadUserCooldown() {
   } catch (error) {
     console.error('Error loading cooldown:', error);
     lastPaintTime = 0;
+  }
+}
+
+// Cleanup cooldown listener
+function cleanupCooldownListener() {
+  if (cooldownListener) {
+    cooldownListener(); // Firebase unsubscribe
+    cooldownListener = null;
   }
 }
 
