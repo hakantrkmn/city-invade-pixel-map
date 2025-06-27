@@ -1,5 +1,4 @@
-name: Deploy TR and USA sites
-
+name: Deploy USA site (root)
 on:
   push:
     branches: [usa]
@@ -8,12 +7,12 @@ permissions:
   contents: read
   pages: write
   id-token: write
-env:
-  BASE_PATH: /city-invade-pixel-map/usa/
+
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
+      # Firebase gizlileri
       VITE_FB_APIKEY: ${{ secrets.VITE_FB_APIKEY }}
       VITE_FB_AUTHDOMAIN: ${{ secrets.VITE_FB_AUTHDOMAIN }}
       VITE_FB_PROJECTID: ${{ secrets.VITE_FB_PROJECTID }}
@@ -25,36 +24,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+        with: { node-version: 20 }
       - run: npm ci
-
-      # ---------- build USA ----------
-      - name: Build USA
-        run: |
-          export BASE_PATH=/city-invade-pixel-map/usa/
-          npm run build
-          mkdir -p site/usa
-          mv dist/* site/usa/
-
-      # ---------- build TR ----------
-      - name: Build TR
-        run: |
-          unset BASE_PATH            # default /city-invade-pixel-map/
-          npm run build
-          mv dist/* site/
-
-      # ---------- upload combined ----------
+      - run: npm run build           # /city-invade-pixel-map/ tabanıyla USA derlenir
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
-        with: { path: site }
+        with: { path: dist }         # dist'i doğrudan köke koy
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    environment: github-pages       # prod ortama dağıt
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4 
