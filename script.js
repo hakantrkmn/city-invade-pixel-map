@@ -1,7 +1,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js';
 import { getDatabase, ref, set, onValue, serverTimestamp, remove } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js';
-import mapUrl from './tr.json?url';
+import mapUrl from './us-states.json?url';
 
 // Firebase config from Vite environment variables
 const firebaseConfig = {
@@ -34,8 +34,8 @@ onValue(testRef, snap => {
 let geojsonData = null;
 let pixelGrid = [];
 let nameGrid = [];
-let gridCols = 200; // Piksel grid genişliği (düşük tut, performans için)
-let gridRows = 100; // Piksel grid yüksekliği
+let gridCols = 600; // Piksel grid genişliği
+let gridRows = 300; // Piksel grid yüksekliği
 let zoom = 1;
 let offsetX = 0;
 let offsetY = 0;
@@ -67,6 +67,12 @@ function hideCitySelector() {
 fetch(mapUrl)
   .then(response => response.json())
   .then(data => {
+    // Alaska & Hawaii haritadan çıkar
+    data.features = data.features.filter(f => {
+      const n = (f.properties && f.properties.name) || '';
+      const id = f.id || '';
+      return !['Alaska', 'Hawaii'].includes(n) && !['AK', 'HI'].includes(id);
+    });
     geojsonData = data;
     computePixelGrid();
     drawMap();
@@ -119,9 +125,23 @@ function computePixelGrid() {
   pixelGrid = Array.from({ length: gridCols }, () => Array(gridRows).fill(null));
   nameGrid = Array.from({ length: gridCols }, () => Array(gridRows).fill(null));
 
-  // Türkiye'nin yaklaşık sınırları
-  const minLon = 25.0, maxLon = 45.0;
-  const minLat = 35.5, maxLat = 42.1;
+  // GeoJSON içindeki tüm koordinatları tarayarak dinamik sınır belirle
+  const allCoords = [];
+  geojsonData.features.forEach(f => {
+    const g = f.geometry;
+    if (!g) return;
+    if (g.type === 'Polygon') {
+      g.coordinates.forEach(ring => ring.forEach(pt => allCoords.push(pt)));
+    } else if (g.type === 'MultiPolygon') {
+      g.coordinates.forEach(poly => poly.forEach(ring => ring.forEach(pt => allCoords.push(pt))));
+    }
+  });
+  const lons = allCoords.map(c => c[0]);
+  const lats = allCoords.map(c => c[1]);
+  const minLon = Math.min(...lons);
+  const maxLon = Math.max(...lons);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
 
   // Şehirlerin polygonlarını ve renklerini hazırla
   const totalCities = geojsonData.features.length;
@@ -223,10 +243,29 @@ function drawMap() {
   // Piksel boyutu (zoom'a göre)
   pixelSize = Math.min(width / gridCols, height / gridRows) * zoom;
 
-  // İlk yüklemede merkezi ortala
+  // İlk yüklemede gerçek boyalı alanı merkeze al
   if (!window.__mapCentered) {
-    offsetX = (width - gridCols * pixelSize) / 2;
-    offsetY = (height - gridRows * pixelSize) / 2;
+    let minGX = gridCols, maxGX = -1, minGY = gridRows, maxGY = -1;
+    for (let gx = 0; gx < gridCols; gx++) {
+      for (let gy = 0; gy < gridRows; gy++) {
+        if (pixelGrid[gx][gy]) {
+          if (gx < minGX) minGX = gx;
+          if (gx > maxGX) maxGX = gx;
+          if (gy < minGY) minGY = gy;
+          if (gy > maxGY) maxGY = gy;
+        }
+      }
+    }
+    if (maxGX >= minGX && maxGY >= minGY) {
+      const usedWidth = (maxGX - minGX + 1) * pixelSize;
+      const usedHeight = (maxGY - minGY + 1) * pixelSize;
+      offsetX = (width - usedWidth) / 2 - minGX * pixelSize;
+      offsetY = (height - usedHeight) / 2 - minGY * pixelSize;
+    } else {
+      // Fallback eski yöntem
+      offsetX = (width - gridCols * pixelSize) / 2;
+      offsetY = (height - gridRows * pixelSize) / 2;
+    }
     window.__mapCentered = true;
   }
 
@@ -282,8 +321,8 @@ function drawMap() {
       const cityNameToShow = (painted && painted.by) ? painted.by : nameGrid[gx][gy];
       if (cityNameToShow) {
         const defenders = cityCounts[cityNameToShow] || 0;
-        const defenderText = defenders === 1 ? '1 kişi savaşıyor' : `${defenders} kişi savaşıyor`;
-        tooltip.textContent = `${cityNameToShow} için ${defenderText}`;
+        const defenderText = defenders === 1 ? '1 defender' : `${defenders} defenders`;
+        tooltip.textContent = `${cityNameToShow}: ${defenderText}`;
         tooltip.style.left = e.clientX + 12 + 'px';
         tooltip.style.top = e.clientY + 8 + 'px';
         tooltip.style.display = 'block';
@@ -327,12 +366,12 @@ function drawMap() {
     const gx = Math.floor((mx - offsetX) / pixelSize);
     const gy = Math.floor((my - offsetY) / pixelSize);
     if (!myCityName) {
-      alert('Önce bir kütük (şehir) seçmelisin!');
+      alert('Please choose a state first!');
       return;
     }
     if (Date.now() - lastPaintTime < COOLDOWN_MS) {
       const remainingS = Math.ceil((COOLDOWN_MS - (Date.now() - lastPaintTime))/1000);
-      alert(`Boyama için ${remainingS} saniye daha beklemelisin!`);
+      alert(`You must wait ${remainingS} seconds before painting again!`);
       return;
     }
     if (gx >= 0 && gx < gridCols && gy >= 0 && gy < gridRows) {
@@ -471,7 +510,7 @@ function setupUI() {
   }
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
-      if (confirm('Haritayı tamamen sıfırlamak istediğine emin misin?')) {
+      if (confirm('Are you sure you want to completely reset the map?')) {
         remove(ref(db, 'pixels')).then(()=>{
           Object.keys(paintedPixels).forEach(k=>delete paintedPixels[k]);
           computePixelGrid();
@@ -544,7 +583,7 @@ function updateCooldownDisplay() {
   if (!display) return;
   const remaining = COOLDOWN_MS - (Date.now() - lastPaintTime);
   if (remaining <= 0) {
-    display.textContent = 'Boyama hazır';
+    display.textContent = 'Ready to paint';
     if (cooldownInterval) {
       clearInterval(cooldownInterval);
       cooldownInterval = null;
@@ -552,7 +591,7 @@ function updateCooldownDisplay() {
   } else {
     const sec = Math.floor(remaining / 1000) % 60;
     const min = Math.floor(remaining / 60000);
-    display.textContent = `Sonraki boyamaya: ${min}:${sec.toString().padStart(2,'0')}`;
+    display.textContent = `Next paint in: ${min}:${sec.toString().padStart(2,'0')}`;
   }
 }
 
