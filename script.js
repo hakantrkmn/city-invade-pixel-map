@@ -694,15 +694,19 @@ const COOLDOWN_MS = 5 * 60 * 1000; // 5 dk
 let lastPaintTime = 0;
 let cooldownInterval = null;
 
-// Load user's last paint time from Firebase
+// Load user's last paint time from Firebase and listen for real-time updates
 async function loadUserCooldown() {
   if (!redditUser) return;
   try {
     const paintTimeRef = ref(db, `paintTimes/${redditUser}`);
+    // Real-time listener - updates when user paints from another device
     onValue(paintTimeRef, (snapshot) => {
-      lastPaintTime = snapshot.val() || 0;
-      startCooldown();
-    }, { onlyOnce: true });
+      const newTime = snapshot.val() || 0;
+      if (newTime !== lastPaintTime) {
+        lastPaintTime = newTime;
+        startCooldown();
+      }
+    });
   } catch (error) {
     console.error('Error loading cooldown:', error);
     lastPaintTime = 0;
