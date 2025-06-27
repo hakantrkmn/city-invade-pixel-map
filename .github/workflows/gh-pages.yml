@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy TR and USA sites
 
 on:
   push:
@@ -28,14 +28,26 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      - run: npm run build
-      - run: |
-          mkdir -p dist-root/usa
-          mv dist/* dist-root/usa/
+
+      # ---------- build USA ----------
+      - name: Build USA
+        run: |
+          export BASE_PATH=/city-invade-pixel-map/usa/
+          npm run build
+          mkdir -p site/usa
+          mv dist/* site/usa/
+
+      # ---------- build TR ----------
+      - name: Build TR
+        run: |
+          unset BASE_PATH            # default /city-invade-pixel-map/
+          npm run build
+          mv dist/* site/
+
+      # ---------- upload combined ----------
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist-root
+        with: { path: site }
 
   deploy:
     needs: build
