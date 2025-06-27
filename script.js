@@ -93,6 +93,9 @@ let pixelSize = 1; // Ekrana çizilirken hesaplanacak
 let tooltip = null;
 let canPaint = false; // allowed to paint only after reddit login
 
+// Performance optimization: prevent excessive redraws
+let drawScheduled = false;
+
 // After db initialization
 export const paintedPixels = {};
 
@@ -126,10 +129,10 @@ fetch(mapUrl)
     });
     geojsonData = data;
     computePixelGrid();
-    drawMap();
+    scheduleDrawMap();
     window.addEventListener('resize', () => {
       computePixelGrid();
-      drawMap();
+      scheduleDrawMap();
     });
 
     // Button events
@@ -153,7 +156,7 @@ onValue(pixelsRef, snap => {
       }
     }
   });
-  drawMap(); // Yeniden çiz
+  scheduleDrawMap(); // Yeniden çiz
 });
 
 // Static palette of 81 distinct colors
@@ -290,6 +293,16 @@ function computePixelGrid() {
   }
 }
 
+// Optimized draw scheduling to prevent excessive redraws
+function scheduleDrawMap() {
+  if (drawScheduled) return; // Already scheduled
+  drawScheduled = true;
+  requestAnimationFrame(() => {
+    drawMap();
+    drawScheduled = false;
+  });
+}
+
 function drawMap() {
   // Canvas'ı oluştur veya güncelle
   const container = document.querySelector('.map-container');
@@ -352,7 +365,9 @@ function drawMap() {
   ctx.restore();
 
   // --- Lightweight grid overlay ---
-  const showGrid = pixelSize >= 4; // only draw when zoomed enough
+  // Detect mobile device
+  const isMobile = window.innerWidth < 768 || 'ontouchstart' in window;
+  const showGrid = pixelSize >= 4 && !isMobile; // only draw when zoomed enough AND not mobile
   if (showGrid) {
     const borderAlpha = Math.min(1, (pixelSize - 3) / 10);
     ctx.lineWidth = 1;
@@ -396,8 +411,17 @@ function drawMap() {
     document.body.appendChild(tooltip);
   }
 
-  // Mouse hareketiyle şehir ismi göster
+  // Mouse hareketiyle şehir ismi göster (throttled for performance)
+  let mouseMoveThrottle = false;
+  let lastTooltipContent = '';
   canvas.onmousemove = function(e) {
+    if (mouseMoveThrottle) return; // Skip if throttled
+    
+    mouseMoveThrottle = true;
+    setTimeout(() => {
+      mouseMoveThrottle = false;
+    }, 16); // Limit to ~60fps
+    
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
@@ -417,16 +441,23 @@ function drawMap() {
           tooltipText += `\nPainted by: u/${painted.user}`;
         }
         
-        // Multi-line tooltip support
-        tooltip.innerHTML = tooltipText.replace(/\n/g, '<br>');
+        // Only update tooltip if content changed (caching optimization)
+        const newContent = tooltipText.replace(/\n/g, '<br>');
+        if (newContent !== lastTooltipContent) {
+          tooltip.innerHTML = newContent;
+          lastTooltipContent = newContent;
+        }
+        
         tooltip.style.left = e.clientX + 12 + 'px';
         tooltip.style.top = e.clientY + 8 + 'px';
         tooltip.style.display = 'block';
       } else {
         tooltip.style.display = 'none';
+        lastTooltipContent = '';
       }
     } else {
       tooltip.style.display = 'none';
+      lastTooltipContent = '';
     }
   };
 
@@ -447,7 +478,7 @@ function drawMap() {
     if (isDragging) {
       offsetX = dragOffsetStart.x + (e.clientX - dragStart.x);
       offsetY = dragOffsetStart.y + (e.clientY - dragStart.y);
-      drawMap();
+      scheduleDrawMap();
     }
   };
   window.onmouseup = function(e) {
@@ -484,7 +515,7 @@ function drawMap() {
         lastPaintTime = Date.now();
         saveUserPaintTime(lastPaintTime);
         startCooldown();
-        drawMap();
+        scheduleDrawMap();
       }
     }
   };
@@ -505,7 +536,7 @@ function drawMap() {
     // Zoom merkezini mouse konumuna göre ayarla
     offsetX = mouseX - ((mouseX - offsetX) * (zoom / prevZoom));
     offsetY = mouseY - ((mouseY - offsetY) * (zoom / prevZoom));
-    drawMap();
+    scheduleDrawMap();
   };
 
   // Touch support
@@ -539,7 +570,7 @@ function drawMap() {
     if (e.touches.length === 1 && isDragging) {
       offsetX = dragOffsetStart.x + (e.touches[0].clientX - dragStart.x);
       offsetY = dragOffsetStart.y + (e.touches[0].clientY - dragStart.y);
-      drawMap();
+      scheduleDrawMap();
     } else if (e.touches.length === 2) {
       const [t1, t2] = e.touches;
       const newDist = getTouchDist(t1, t2);
@@ -550,7 +581,7 @@ function drawMap() {
         // adjust offsets relative to pinch center
         offsetX = pinchCenter.x - ((pinchCenter.x - offsetX) * (zoom / prevZoom));
         offsetY = pinchCenter.y - ((pinchCenter.y - offsetY) * (zoom / prevZoom));
-        drawMap();
+        scheduleDrawMap();
       }
     }
   }, { passive: false });
@@ -614,7 +645,7 @@ function setupUI() {
         remove(ref(db, 'pixels')).then(()=>{
           Object.keys(paintedPixels).forEach(k=>delete paintedPixels[k]);
           computePixelGrid();
-          drawMap();
+          scheduleDrawMap();
         });
       }
     });
