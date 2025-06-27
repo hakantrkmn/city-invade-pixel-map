@@ -3,6 +3,87 @@ import { getAnalytics } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase
 import { getDatabase, ref, set, onValue, serverTimestamp, remove } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js';
 import mapUrl from './us-states.json?url';
 
+// === Reddit OAuth constants ===
+const REDDIT_CLIENT_ID = '89f2pNvg2GuguYf7Oe7SMg';
+const REDDIT_REDIRECT = 'https://hakantrkmn.github.io/city-invade-pixel-map/'; // root page acts as callback
+
+// === OAuth helper (PKCE) ===
+function generateRandomString(len = 128) {
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  return btoa(String.fromCharCode(...arr)).replace(/[^a-zA-Z0-9]/g, '').substring(0, len);
+}
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return buf;
+}
+function base64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function redditLogin() {
+  const verifier = generateRandomString(64);
+  const challenge = base64url(await sha256(verifier));
+  sessionStorage.setItem('pkce_verifier', verifier);
+  const state = crypto.randomUUID();
+  sessionStorage.setItem('oauth_state', state);
+  const params = new URLSearchParams({
+    client_id: REDDIT_CLIENT_ID,
+    response_type: 'code',
+    state,
+    redirect_uri: REDDIT_REDIRECT,
+    duration: 'temporary',
+    scope: 'identity',
+    code_challenge: challenge,
+    code_challenge_method: 'S256'
+  });
+  window.location.href = `https://www.reddit.com/api/v1/authorize?${params}`;
+}
+
+async function handleOAuthCallback() {
+  const qs = new URLSearchParams(window.location.search);
+  if (!qs.get('code')) return;
+  const code = qs.get('code');
+  const state = qs.get('state');
+  if (state !== sessionStorage.getItem('oauth_state')) {
+    alert('OAuth state mismatch');
+    return;
+  }
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  // Exchange code -> token
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: REDDIT_REDIRECT,
+    code_verifier: verifier
+  });
+  const resp = await fetch('https://www.reddit.com/api/v1/access_token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
+  });
+  const json = await resp.json();
+  if (json.access_token) {
+    localStorage.setItem('reddit_token', json.access_token);
+    localStorage.setItem('token_exp', Date.now() + json.expires_in * 1000);
+  }
+  // clean query params
+  window.history.replaceState({}, '', REDDIT_REDIRECT);
+}
+
+async function getRedditUsername() {
+  const token = localStorage.getItem('reddit_token');
+  const exp = parseInt(localStorage.getItem('token_exp') || '0', 10);
+  if (!token || Date.now() > exp) return null;
+  const r = await fetch('https://oauth.reddit.com/api/v1/me', { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) return null;
+  const j = await r.json();
+  return j.name;
+}
+
+let redditUser = null;
+await handleOAuthCallback();
+
 // Firebase config from Vite environment variables
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FB_APIKEY,
@@ -38,6 +119,7 @@ let dragOffsetStart = { x: 0, y: 0 };
 let canvas, ctx;
 let pixelSize = 1; // Ekrana çizilirken hesaplanacak
 let tooltip = null;
+let canPaint = false; // allowed to paint only after reddit login
 
 // After db initialization
 export const paintedPixels = {};
@@ -395,6 +477,7 @@ function drawMap() {
     const my = e.clientY - rect.top;
     const gx = Math.floor((mx - offsetX) / pixelSize);
     const gy = Math.floor((my - offsetY) / pixelSize);
+    if (!canPaint) { alert('Please login with Reddit first'); return; }
     if (!myCityName) {
       alert('Please choose a state first!');
       return;
@@ -573,6 +656,27 @@ function setupUI() {
     myCityName = null;
     myCityColor = null;
   }
+
+  // Reddit login button
+  const loginBtn = document.getElementById('reddit-login-btn');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', redditLogin);
+  }
+
+  // Determine Reddit login state
+  getRedditUsername().then(name => {
+    redditUser = name;
+    const userBox = document.getElementById('reddit-user-display');
+    if (redditUser) {
+      canPaint = true;
+      if (loginBtn) loginBtn.style.display = 'none';
+      if (userBox) { userBox.textContent = redditUser; userBox.style.display = 'block'; }
+    } else {
+      canPaint = false;
+      if (loginBtn) loginBtn.style.display = 'block';
+      if (userBox) userBox.style.display = 'none';
+    }
+  });
 }
 
 // After globals
