@@ -29,10 +29,13 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
+      - run: |
+          mkdir -p dist-root/usa
+          mv dist/* dist-root/usa/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: dist-root
 
   deploy:
     needs: build
