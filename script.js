@@ -4,8 +4,8 @@ import { getDatabase, ref, set, onValue, serverTimestamp, remove } from 'https:/
 import mapUrl from './us-states.json?url';
 
 // === Reddit OAuth constants ===
-const REDDIT_CLIENT_ID = '89f2pNvg2GuguYf7Oe7SMg';
-const REDDIT_REDIRECT = import.meta.env.DEV ? 'http://localhost:5173/city-invade-pixel-map/' : 'https://hakantrkmn.github.io/city-invade-pixel-map/';
+const REDDIT_CLIENT_ID = 'GsUf9EPn37hzVEx20OYsMw';
+const REDDIT_REDIRECT = import.meta.env.DEV ? 'http://localhost:5173/' : 'https://hakanturkmen.github.io/city-invade-pixel-map/';
 
 // === OAuth helper (PKCE) ===
 function generateRandomString(len = 128) {
