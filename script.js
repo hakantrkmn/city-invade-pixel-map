@@ -4,7 +4,7 @@ import { getDatabase, ref, set, onValue, serverTimestamp, remove } from 'https:/
 
 // === Reddit OAuth constants ===
 const REDDIT_CLIENT_ID = 'v5Ng2xi9MH8ywFHmbo7lIA';
-const REDDIT_REDIRECT = import.meta.env.DEV ? 'http://localhost:5173/' : 'https://hakantrkmn.github.io/city-invade-pixel-map/';
+const REDDIT_REDIRECT = window.location.hostname === 'localhost' ? 'http://localhost:5173/' : 'https://hakantrkmn.github.io/city-invade-pixel-map/';
 
 // === OAuth helper (PKCE) ===
 function generateRandomString(len = 128) {
@@ -57,15 +57,25 @@ handleOAuthCallback();
 
 // Firebase config from Vite environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FB_APIKEY,
-  authDomain: import.meta.env.VITE_FB_AUTHDOMAIN,
-  projectId: import.meta.env.VITE_FB_PROJECTID,
-  storageBucket: import.meta.env.VITE_FB_STORAGE,
-  messagingSenderId: import.meta.env.VITE_FB_SENDER,
-  appId: import.meta.env.VITE_FB_APPID,
-  measurementId: import.meta.env.VITE_FB_MEAS,
-  databaseURL: import.meta.env.VITE_FB_DBURL
+  apiKey: import.meta.env.VITE_FB_APIKEY || 'MISSING_API_KEY',
+  authDomain: import.meta.env.VITE_FB_AUTHDOMAIN || 'MISSING_AUTH_DOMAIN',
+  projectId: import.meta.env.VITE_FB_PROJECTID || 'MISSING_PROJECT_ID',
+  storageBucket: import.meta.env.VITE_FB_STORAGE || 'MISSING_STORAGE_BUCKET',
+  messagingSenderId: import.meta.env.VITE_FB_SENDER || 'MISSING_SENDER_ID',
+  appId: import.meta.env.VITE_FB_APPID || 'MISSING_APP_ID',
+  measurementId: import.meta.env.VITE_FB_MEAS || 'MISSING_MEASUREMENT_ID',
+  databaseURL: import.meta.env.VITE_FB_DBURL || 'MISSING_DATABASE_URL'
 };
+
+// Check for missing Firebase config
+const missingConfigs = Object.entries(firebaseConfig)
+  .filter(([key, value]) => value.startsWith('MISSING_'))
+  .map(([key, value]) => key);
+
+if (missingConfigs.length > 0) {
+  alert(`Missing Firebase configuration: ${missingConfigs.join(', ')}\nPlease check your environment variables.`);
+  throw new Error(`Missing Firebase configuration: ${missingConfigs.join(', ')}`);
+}
 
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
