@@ -1,7 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js';
 import { getDatabase, ref, set, onValue, serverTimestamp, remove } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js';
-import mapUrl from './us-states.json?url';
 
 // === Reddit OAuth constants ===
 const REDDIT_CLIENT_ID = 'v5Ng2xi9MH8ywFHmbo7lIA';
@@ -118,7 +117,7 @@ function hideCitySelector() {
 export const bufferCanvas = document.createElement('canvas');
 export const bufferCtx = bufferCanvas.getContext('2d');
 
-fetch(mapUrl)
+fetch('us-states.json')
   .then(response => response.json())
   .then(data => {
     // Alaska & Hawaii haritadan çıkar
